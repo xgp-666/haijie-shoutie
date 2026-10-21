@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<!--
+  ==========================================================================
+  拾光 · 手账记录风个人回忆相册
+  --------------------------------------------------------------------------
+  纯静态页面，无需数据库、无需构建，上传到任意静态托管即可使用。
+  · 改照片 / 文字 / 标签 / 字体：编辑 assets/js/data.js
+  · 手机上可以通过右下角「＋ 写一页」上传照片（保存在本机浏览器里）
+  ==========================================================================
+-->
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>海街手帖 · 动漫风手账相册</title>
+  <meta name="description" content="一本贴在纸上的海街手帖，记录海边的夏天与驶过的电车。">
+  <meta name="theme-color" content="#f7f3e8">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="海街手帖">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="site.webmanifest">
+  <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/images/icon-192.png">
+
+  <!-- 在 CSS 加载前先应用主题，避免刷新时闪色 -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('album-theme');
+        var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {}
+    })();
+  </script>
+
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+
+<body>
+
+  <!-- ===================== 顶部细条（滚动后出现） ===================== -->
+  <div class="topbar" id="topbar">
+    <span class="topbar__name" id="topbarName">拾光</span>
+    <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换浅色 / 深色模式">
+      <svg class="theme-toggle__icon theme-toggle__icon--sun" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="4.2"></circle>
+        <g stroke-linecap="round">
+          <path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4L17 7M7 17l-1.6 1.6"></path>
+        </g>
+      </svg>
+      <svg class="theme-toggle__icon theme-toggle__icon--moon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M20 14.4A8.4 8.4 0 1 1 9.6 4a6.8 6.8 0 0 0 10.4 10.4z"></path>
+      </svg>
+    </button>
+  </div>
+
+  <!-- ===================== 悬浮「写一页」按钮（手机上传入口） ===================== -->
+  <button class="fab" id="fabAdd" type="button">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke-linecap="round"></path></svg>
+    写一页
+  </button>
+
+  <!-- ===================== 封面：手账扉页 ===================== -->
+  <header class="hero" id="top">
+    <div class="hero__inner">
+      <!-- 拍立得封面照片：在 data.js 的 SITE.cover 里换 -->
+      <figure class="hero__photo" id="heroPhoto" title="点这张照片可以换封面">
+        <span class="tape" style="--tape-color: rgba(127,199,255,.62); --tape-color: color-mix(in srgb, var(--c4) 62%, transparent); --tape-rot: -4deg;"></span>
+        <img id="heroImg" src="assets/images/cover.svg" alt="封面照片">
+        <span class="hero__swap" aria-hidden="true">点我换封面</span>
+        <figcaption class="hero__script" id="heroScript" data-editable="script"></figcaption>
+      </figure>
+
+      <div class="hero__text">
+        <p class="hero__eyebrow" id="heroEyebrow" data-editable="eyebrow"></p>
+        <h1 class="hero__title" id="heroTitle"><em data-editable="title">海街手帖</em></h1>
+        <p class="hero__desc" id="heroDesc" data-editable="desc"></p>
+        <img class="ai-sticker ai-sticker--leaf" src="assets/images/stickers/sticker-leaf.jpg" alt="" aria-hidden="true">
+        <!-- 和纸胶带色卡装饰 -->
+        <div class="hero__tags" aria-hidden="true">
+          <span class="washi"></span>
+          <span class="washi"></span>
+          <span class="washi"></span>
+          <span class="washi"></span>
+        </div>
+      </div>
+    </div>
+
+    <a class="hero__hint" href="#gallery">
+      <span>turn the page</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v14M6 13l6 6 6-6"></path></svg>
+    </a>
+  </header>
+
+  <main>
+
+    <!-- ===================== 轮播（手账相册页） ===================== -->
+    <!-- 轮播图片在 data.js 的 SLIDES 里改 -->
+    <section class="slideshow" id="slideshow" aria-label="精选轮播">
+      <div class="slideshow__frame">
+        <span class="tape tape--corner" style="--tape-color: rgba(255,210,63,.62); --tape-color: color-mix(in srgb, var(--c2) 62%, transparent);"></span>
+        <div class="slideshow__viewport" id="slideViewport"></div>
+      </div>
+
+      <div class="slideshow__bar">
+        <p class="slideshow__caption" id="slideCaption"></p>
+        <button class="slideshow__edit" id="slidesBtn" type="button" title="更换轮播图片和小字">换图</button>
+        <div class="slideshow__ctrl">
+          <button class="slideshow__btn" id="slidePrev" type="button" aria-label="上一张">‹</button>
+          <div class="slideshow__dots" id="slideDots"></div>
+          <button class="slideshow__btn" id="slideNext" type="button" aria-label="下一张">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== 纵向时间线 ===================== -->
+    <section class="section" id="gallery">
+      <div class="section__head">
+        <h2 class="section__title" id="galleryTitle" data-editable="galleryTitle">时间线</h2>
+        <p class="section__note" id="galleryNote" data-editable="galleryNote">photos can be clicked to enlarge</p>
+        <img class="ai-sticker ai-sticker--heart" src="assets/images/stickers/sticker-heart.jpg" alt="" aria-hidden="true" loading="lazy" decoding="async">
+      </div>
+
+      <!-- 分类标签筛选按钮（标签来自 data.js 的 MEMORIES + 手机上传的条目） -->
+      <div class="filters" id="filters" aria-label="相册分类筛选"></div>
+
+      <ol class="timeline" id="timeline"></ol>
+
+      <p class="empty" id="empty" hidden>这一页还没有贴上回忆。</p>
+    </section>
+
+  </main>
+
+  <!-- ===================== 页脚 ===================== -->
+  <footer class="footer">
+    <img class="ai-sticker ai-sticker--leaf2" src="assets/images/stickers/sticker-leaf.jpg" alt="" aria-hidden="true" loading="lazy" decoding="async">
+    <p class="footer__line" id="footerLine" data-editable="footer"></p>
+    <p class="footer__tip" id="footerTip" data-editable="footerTip"></p>
+    <p class="footer__ops">
+      <button id="exportBtn" type="button">导出备份</button>
+      <span class="sep">·</span>
+      <button id="importBtn" type="button">导入备份</button>
+      <span class="sep">·</span>
+      <button id="exportJsBtn" type="button">固化到相册</button>
+      <span class="sep">·</span>
+      <button id="themeBtn" type="button">换主题</button>
+      <span class="sep">·</span>
+      <button id="coverBtn" type="button">换封面</button>
+      <span class="sep">·</span>
+      <button id="installBtn" type="button" hidden>装到手机桌面</button>
+      <span class="sep" id="installSep" hidden>·</span>
+      <button id="resetBtn" type="button">恢复默认</button>
+      <input type="file" id="importInput" accept=".json,application/json" hidden>
+      <input type="file" id="coverInput" accept="image/*" hidden>
+    </p>
+  </footer>
+
+  <!-- ===================== 「写一页」上传弹层 ===================== -->
+  <div class="sheet" id="sheet" hidden>
+    <div class="sheet__mask" id="sheetMask"></div>
+    <form class="sheet__body" id="addForm">
+      <p class="sheet__title" id="sheetTitle">贴一页新回忆</p>
+
+      <label class="sheet__pick" id="pickArea">
+        <input type="file" id="fileInput" accept="image/*" hidden>
+        <img id="pickPreview" alt="" hidden>
+        <span id="pickText">＋ 点这里选照片<br>（手机上可直接拍照或从相册选择）</span>
+      </label>
+
+      <input class="sheet__input" id="fDate" type="text" placeholder="时间，如：2026 · 十月（留空则自动填今天）">
+      <input class="sheet__input" id="fTitle" type="text" placeholder="标题（可留空）">
+      <textarea class="sheet__input" id="fText" placeholder="随手写点什么……"></textarea>
+      <input class="sheet__input" id="fJp" type="text" placeholder="日文行李牌（可留空），如：海の近くのふみきり">
+      <input class="sheet__input" id="fTags" type="text" placeholder="分类标签，用逗号隔开，如：海边, 电车">
+      <input class="sheet__input" id="fScript" type="text" placeholder="手写英文点缀（可留空），如：a slow afternoon">
+
+      <div class="sheet__row">
+        <button type="button" class="sheet__btn" id="sheetCancel">取消</button>
+        <button type="submit" class="sheet__btn sheet__btn--ok" id="sheetSave">贴上去</button>
+      </div>
+      <p class="sheet__hint" id="sheetHint">照片会自动压缩后保存在这台手机的浏览器里，可用「导出备份」生成文件带到别的设备</p>
+    </form>
+  </div>
+
+  <!-- ===================== 「换主题」弹层（手机上也能改配色 / 明暗 / 字体） ===================== -->
+  <div class="sheet" id="themeSheet" hidden>
+    <div class="sheet__mask" id="themeMask"></div>
+    <form class="sheet__body" id="themeForm">
+      <p class="sheet__title">换主题</p>
+
+      <p class="sheet__label">整套配色（点一下就换）</p>
+      <div class="theme-presets" id="themePresets"></div>
+
+      <p class="sheet__label">六个颜色：点色块选，或直接打字改 #色值</p>
+      <div id="themeColors"></div>
+
+      <p class="sheet__label">明暗</p>
+      <div class="theme-presets">
+        <button type="button" class="theme-preset" id="modeLight">浅色</button>
+        <button type="button" class="theme-preset" id="modeDark">深色</button>
+      </div>
+
+      <p class="sheet__label">字体（也可以直接打字填字体名）</p>
+      <div class="theme-presets">
+        <button type="button" class="theme-preset" data-font="kai">楷体</button>
+        <button type="button" class="theme-preset" data-font="hei">黑体</button>
+        <button type="button" class="theme-preset" data-font="song">宋体</button>
+      </div>
+      <input class="sheet__input" id="fFont" type="text" placeholder="例如：Kaiti SC / PingFang SC / 你的字体名">
+
+      <div class="sheet__row">
+        <button type="button" class="sheet__btn" id="themeCancel">取消</button>
+        <button type="submit" class="sheet__btn sheet__btn--ok" id="themeSave">用这套</button>
+      </div>
+      <div class="sheet__row">
+        <button type="button" class="sheet__btn" id="themeCopy">复制色板代码</button>
+        <button type="button" class="sheet__btn" id="themeReset">恢复默认主题</button>
+      </div>
+      <p class="sheet__hint">主题只存在这台设备；想永久生效，点「复制色板代码」粘进 data.js 的 PALETTE / FONT。</p>
+    </form>
+  </div>
+
+  <!-- ===================== 「换轮播图」弹层 ===================== -->
+  <div class="sheet" id="slideSheet" hidden>
+    <div class="sheet__mask" id="slideMask"></div>
+    <form class="sheet__body" id="slideForm">
+      <p class="sheet__title">换轮播图</p>
+      <p class="sheet__hint">点缩略图换照片（手机可拍照 / 选相册），下面的小字直接打字改，改完点「保存」。</p>
+      <div id="slideRows"></div>
+      <div class="sheet__row">
+        <button type="button" class="sheet__btn" id="slideCancel">取消</button>
+        <button type="submit" class="sheet__btn sheet__btn--ok" id="slideSaveBtn">保存</button>
+      </div>
+      <p class="sheet__hint">只存在这台设备；想永久生效，用页脚「固化到相册」导出后粘进 data.js 的 SLIDES。</p>
+      <input type="file" id="slideInput" accept="image/*" hidden>
+    </form>
+  </div>
+
+  <!-- ===================== 图片放大预览 ===================== -->
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="照片预览" hidden>
+    <button class="lightbox__close" id="lightboxClose" type="button" aria-label="关闭">×</button>
+    <button class="lightbox__nav lightbox__nav--prev" id="lightboxPrev" type="button" aria-label="上一张">‹</button>
+    <figure class="lightbox__figure">
+      <img class="lightbox__img" id="lightboxImg" src="" alt="">
+      <figcaption class="lightbox__cap">
+        <span class="lightbox__date" id="lightboxDate"></span>
+        <span class="lightbox__text" id="lightboxText"></span>
+      </figcaption>
+    </figure>
+    <button class="lightbox__nav lightbox__nav--next" id="lightboxNext" type="button" aria-label="下一张">›</button>
+  </div>
+
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/main.js"></script>
+</body>
+</html>
