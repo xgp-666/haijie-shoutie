@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0.2" y2="1">
+      <stop offset="0" stop-color="#e4ddcd"/>
+      <stop offset="0.5" stop-color="#cfc5b1"/>
+      <stop offset="1" stop-color="#a89c85"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.62" cy="0.3" r="0.48">
+      <stop offset="0" stop-color="#f7eddc" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#f7eddc" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" seed="17"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="900" fill="url(#sky)"/>
+  <rect width="1200" height="900" fill="url(#sun)"/>
+  <path d="M0 640 C 240 604 420 668 660 640 C 880 614 1040 588 1200 616 L1200 900 L0 900 Z" fill="#8b8069" opacity="0.4"/>
+  <path d="M0 780 C 260 754 520 796 800 776 C 990 762 1100 784 1200 770 L1200 900 L0 900 Z" fill="#5e5647" opacity="0.5"/>
+  <!-- 小狗剪影 -->
+  <g fill="#4f4839" opacity="0.72">
+    <path d="M560 700 q0 -34 26 -40 q30 -8 44 12 q10 16 4 34 l-4 46 z"/>
+    <circle cx="586" cy="648" r="34"/>
+    <path d="M558 632 q-14 -22 4 -30 q18 -6 24 12 z"/>
+    <path d="M614 632 q16 -22 -2 -30 q-18 -6 -24 12 z"/>
+    <path d="M556 700 q0 -20 12 -22 l10 22 z"/>
+    <path d="M616 700 q0 -20 -12 -22 l-10 22 z"/>
+    <path d="M596 700 q4 24 -6 34 q-12 10 -20 0 q8 -18 10 -34 z"/>
+    <path d="M628 676 q26 -26 34 -6 q6 18 -16 30 z"/>
+  </g>
+  <ellipse cx="600" cy="756" rx="120" ry="16" fill="#3f392e" opacity="0.22"/>
+  <rect width="1200" height="900" filter="url(#grain)" opacity="0.15" style="mix-blend-mode:multiply"/>
+</svg>
