@@ -12,16 +12,16 @@
   },
   "diag": {
     "v": "h",
-    "swCtrl": false,
+    "swCtrl": true,
     "cloudOn": true,
     "token": true,
     "localMem": 0,
     "cloudMem": 0,
     "slidesLocal": 4,
-    "slideSaved": true,
+    "slideSaved": false,
     "quotaOk": true,
-    "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/13",
     "err": "",
-    "ts": 1792638708056
+    "ts": 1792638783019
   }
 }
