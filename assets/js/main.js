@@ -211,7 +211,24 @@
    * 三、数据组装：data.js 里的固定回忆 + 手机上传的回忆
    * ==================================================================== */
   let workingMemories = [];   // 渲染用的完整列表（上传的排最前面，新的在上）
-  let customs = [];           // 本机上传的条目
+  let customs = [];           // 上传的条目（开了云同步就是云端那份）
+
+  /* ---- 云同步：所有设备共用一个云端相册 ---- */
+  function cloudOn() { return !!(window.AlbumCloud && AlbumCloud.enabled); }
+
+  async function loadCustoms() {
+    if (cloudOn()) {
+      try {
+        const rows = await AlbumCloud.list();
+        const list = rows.map(AlbumCloud.rowToMemory);
+        try { await dbReplaceAll(list); } catch (e) {}   // 本机留一份，断网也能翻
+        return list;
+      } catch (e) {
+        console.warn('云端拉取失败，先用本机数据', e);
+      }
+    }
+    return await storeAll();
+  }
 
   /* ---- 本机改过的文字（data.js 里的固定条目也能改，改完存在浏览器里） ---- */
   const MEM_EDIT_KEY = 'shiguang-mem-edits';
@@ -493,7 +510,14 @@
       rm.setAttribute('aria-label', '删除这条回忆');
       rm.addEventListener('click', async () => {
         if (m.custom) {
-          if (!confirm('撕下这一页？照片会从这台设备的收藏中删除。')) return;
+          if (!confirm(cloudOn()
+            ? '撕下这一页？所有手机上这一页都会删掉。'
+            : '撕下这一页？照片会从这台设备的收藏中删除。')) return;
+          let useCloud = false;
+          try { useCloud = cloudOn() && (await AlbumCloud.ensureToken()); } catch (e) { useCloud = false; }
+          if (useCloud) {
+            try { await AlbumCloud.remove(m.id); } catch (e) { alert('云端删除失败：' + e.message); return; }
+          }
           await storeDelete(m.id);
           customs = customs.filter((x) => x.id !== m.id);
         } else {
@@ -771,28 +795,46 @@
         jp: $('fJp').value.trim()
       };
 
+      // 是否有云同步令牌可用（没有会弹窗要一把，取消则退回本机）
+      let useCloud = false;
+      try { useCloud = cloudOn() && (await AlbumCloud.ensureToken()); } catch (e) { useCloud = false; }
+
       try {
         if (editingItem && editingItem.custom) {
-          // 改的是本机上传的那页
+          // 改的是自己贴的那页
           const old = customs.find((x) => x.id === editingItem.id) || {};
           const updated = Object.assign({}, old, payload);
-          await storePut(updated);
-          customs = customs.map((x) => (x.id === updated.id ? updated : x));
+          if (useCloud) {
+            await AlbumCloud.update(editingItem.id, AlbumCloud.memoryToRow(updated));
+            customs = customs.map((x) => (x.id === updated.id ? updated : x));
+          } else {
+            await storePut(updated);
+            customs = customs.map((x) => (x.id === updated.id ? updated : x));
+          }
         } else if (editingItem) {
           // 改的是 data.js 里的固定那页：只把改动存本机，不动源文件
           memEdits[String(editingItem.fixedIndex)] = Object.assign({}, memEdits[String(editingItem.fixedIndex)], payload);
           saveJSON(MEM_EDIT_KEY, memEdits);
         } else {
           // 新贴一页
-          payload.id = await storeAdd(payload);
-          customs.push(payload);
+          if (useCloud) {
+            const row = await AlbumCloud.insert(AlbumCloud.memoryToRow(payload));
+            customs.unshift(AlbumCloud.rowToMemory(row));
+          } else {
+            payload.id = await storeAdd(payload);
+            customs.push(payload);
+          }
         }
         refresh();
         closeSheet();
         resetSheet();
         if (!editingItem) {
           window.scrollTo({ top: $('gallery').offsetTop - 20, behavior: reduceMotion ? 'auto' : 'smooth' });
-          alert('贴好啦～\n注意：照片只存在这台设备的这个浏览器里（用同一个网址打开才看得到）。\n想让别的手机也看见，用页脚「固化到相册」导出后粘进 data.js。');
+          if (useCloud) {
+            alert('贴好啦～\n已经同步到云端，另一台手机打开这个网址（或刷新一下）就能看到。');
+          } else {
+            alert('贴好啦～\n注意：照片先存到了这台设备的浏览器里。\n要和对方共享，需要在弹窗里粘贴一把 GitHub 令牌（只作用于这个相册仓库）。\n只自己看也行，用页脚「固化到相册」可导出备份。');
+          }
         }
       } catch (err) {
         alert('保存失败：' + (err && err.message ? err.message : err));
@@ -1325,9 +1367,10 @@
     initSheet();
     initBackup();
     initCoverAndReset();
-    try { customs = await storeAll(); } catch (e) { customs = []; }
+    try { customs = await loadCustoms(); } catch (e) { customs = []; }
     buildWorkingMemories();
     initTimeline();
+    initCloudStatus();
 
     /* 注册离线缓存（手机「添加到主屏幕」后也能离线打开） */
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
