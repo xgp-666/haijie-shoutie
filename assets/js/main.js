@@ -732,6 +732,9 @@
    *        （不用手动刷新，满足「一个人改了另一个人随时看到」）
    * ==================================================================== */
   let lastCloudSig = '';
+  function setSyncStatus(txt) {
+    try { const st = $('syncStatus'); if (st) st.textContent = txt; } catch (e) {}
+  }
   async function cloudPoll() {
     if (!cloudOn()) return;
     if (document.querySelector('.sheet.open') || document.body.classList.contains('is-locked')) return; // 正在编辑/预览时不打断
@@ -740,7 +743,7 @@
       const memIds = (data.memories || []).map((m) => String(m.id)).join(',');
       const sAt = data.settings ? (data.settings.savedAt || 0) : 0;
       const sig = memIds + '|' + sAt;
-      if (sig === lastCloudSig) return;       // 没变化就不打扰
+      if (sig === lastCloudSig) { setSyncStatus('☁ 已连接（' + new Date().toLocaleTimeString() + '）· 对方改动会自动出现'); return; } // 没变化就不打扰
       lastCloudSig = sig;
 
       if (data.settings) applyCloudSettings(data.settings);
@@ -765,7 +768,10 @@
         initSite();
         applyThemeEdits();
       } catch (e) {}
-    } catch (e) {}
+      setSyncStatus('☁ 已同步（' + new Date().toLocaleTimeString() + '）· 共 ' + customs.length + ' 页');
+    } catch (e) {
+      setSyncStatus('☁ 同步失败，点「刷新同步」重试');
+    }
   }
 
   /* ======================================================================
@@ -1597,6 +1603,12 @@
       } catch (e) {}
     }
 
+    /* 每台设备一个稳定 id，用于分别上报体检数据，便于排查两台手机各自的状态 */
+    try {
+      deviceId = localStorage.getItem('album_dev_id') || '';
+      if (!deviceId) { deviceId = 'dev' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); localStorage.setItem('album_dev_id', deviceId); }
+    } catch (e) { deviceId = 'dev-err'; }
+
     /* 自动体检：把本机状态上报到云端（不含照片内容），每 3 分钟最多一次。
        这样不需要你在手机上描述，我直接读云端就能看到你手机的真实情况。 */
     if (cloudOn()) {
@@ -1610,7 +1622,8 @@
           let localMem = 0;
           try { localMem = (await storeAll()).length; } catch (e) {}
           AlbumCloud.saveDiag({
-            v: 'h',
+            _dev: deviceId,
+            v: 'i',
             swCtrl: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
             cloudOn: cloudOn(),
             token: !!(window.CLOUD && window.CLOUD.tokenParts) || !!localStorage.getItem('gh_album_token'),
@@ -1633,6 +1646,12 @@
         lastCloudSig = memIds + '|' + sAt;
       } catch (e) {}
       setInterval(cloudPoll, 12000);
+      setSyncStatus('☁ 已连接 · 每 12 秒自动同步');
+      const rb = $('refreshBtn');
+      if (rb) rb.addEventListener('click', () => { setSyncStatus('☁ 同步中…'); cloudPoll(); });
+      // 切回页面 / 点开页面时立刻同步一次，对方刚改的内容马上出现
+      window.addEventListener('focus', () => cloudPoll());
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) cloudPoll(); });
     }
 
     initInstall();
