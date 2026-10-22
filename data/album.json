@@ -11,7 +11,7 @@
     "theme": {}
   },
   "diag": {
-    "v": "e",
+    "v": "g",
     "swCtrl": false,
     "cloudOn": true,
     "token": true,
@@ -20,8 +20,8 @@
     "slidesLocal": 4,
     "slideSaved": true,
     "quotaOk": true,
-    "ua": "Mozilla/5.0 (Linux; Android 12; ADY-AL00 Build/HUAWEIADY-AL00; wv) AppleWebKit/537.36 (KHT",
+    "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like",
     "err": "",
-    "ts": 1792636202575
+    "ts": 1792637853620
   }
 }
