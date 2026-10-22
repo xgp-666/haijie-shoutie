@@ -11,7 +11,7 @@
     "theme": {}
   },
   "diag": {
-    "v": "g",
+    "v": "h",
     "swCtrl": false,
     "cloudOn": true,
     "token": true,
@@ -22,6 +22,6 @@
     "quotaOk": true,
     "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like",
     "err": "",
-    "ts": 1792637938392
+    "ts": 1792638632007
   }
 }
