@@ -230,11 +230,25 @@
   }
 
   /* ---- 云端同步「整本手账的设置」：封面 / 轮播 / 改过的文字 / 主题 ----
-     这些之前只存在本机浏览器，所以两台设备不同步；现在一起放进云端。 */
+     这些之前只存在本机浏览器，所以两台设备不同步；现在一起放进云端。
+     GitHub 写完立刻读会有秒级滞后，读回来的可能是旧版本。
+     所以每份设置都带 savedAt 时间戳：只接受比本机新的云端设置，
+     旧版本一律忽略，避免「刚改完一刷新又变回去」。 */
+  const SETTINGS_AT_KEY = 'shiguang-settings-at';
+  function getSettingsAt() {
+    try { return parseInt(localStorage.getItem(SETTINGS_AT_KEY) || '0', 10) || 0; } catch (e) { return 0; }
+  }
+  function setSettingsAt(t) {
+    try { localStorage.setItem(SETTINGS_AT_KEY, String(t || 0)); } catch (e) {}
+  }
+
   function collectSettings() {
     let cover = '';
     try { cover = localStorage.getItem(COVER_KEY) || ''; } catch (e) {}
+    const savedAt = Date.now();
+    setSettingsAt(savedAt);   // 本机也记一份，用来判断谁更新
     return {
+      savedAt: savedAt,
       cover: cover,
       siteEdits: loadJSON(SITE_EDIT_KEY),
       memEdits: memEdits,
@@ -245,6 +259,10 @@
 
   function applyCloudSettings(s) {
     if (!s || typeof s !== 'object') return;
+    /* 云端版本比本机旧（写后读滞后的旧数据）→ 直接忽略，保留本机较新的改动 */
+    const cloudAt = parseInt(s.savedAt || 0, 10) || 0;
+    if (cloudAt && cloudAt < getSettingsAt()) return;
+    if (cloudAt) setSettingsAt(cloudAt);
     try { if (s.cover) localStorage.setItem(COVER_KEY, s.cover); } catch (e) {}
     if (s.siteEdits && typeof s.siteEdits === 'object') saveJSON(SITE_EDIT_KEY, s.siteEdits);
     if (s.memEdits && typeof s.memEdits === 'object') { memEdits = s.memEdits; saveJSON(MEM_EDIT_KEY, memEdits); }
@@ -1099,9 +1117,11 @@
         localStorage.removeItem(MEM_EDIT_KEY);
         localStorage.removeItem(SITE_EDIT_KEY);
         localStorage.removeItem(COVER_KEY);
+        localStorage.removeItem(SLIDE_EDIT_KEY);
+        setSettingsAt(0);   // 清掉时间戳，之后的云端设置才能正常应用
       } catch (e) {}
       if (cloudOn()) {
-        try { await AlbumCloud.saveSettings({}); } catch (e) {}
+        try { await AlbumCloud.saveSettings(collectSettings()); } catch (e) {}   // 带最新 savedAt，避免被旧数据回滚
       }
       location.reload();
     });
@@ -1170,7 +1190,14 @@
 
     $('slideForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      saveJSON(SLIDE_EDIT_KEY, { slides: slideTemp });
+      /* 显式检查保存是否成功（浏览器空间满时 setItem 会抛错，之前被静默吞掉，表现为「没反应」） */
+      let saved = false;
+      try { localStorage.setItem(SLIDE_EDIT_KEY, JSON.stringify({ slides: slideTemp })); saved = true; }
+      catch (err) {}
+      if (!saved) {
+        alert('存不下：浏览器空间不够了。\n试着换小一点的图片，或先恢复默认清掉旧轮播图再换。');
+        return;
+      }
       closeSlideSheet();
       if (cloudOn()) { try { await AlbumCloud.saveSettings(collectSettings()); } catch (err) {} }
       setTimeout(() => location.reload(), 350);
