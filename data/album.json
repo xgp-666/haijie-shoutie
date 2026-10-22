@@ -1,16 +1,5 @@
 {
-  "memories": [
-    {
-      "id": "mTEST",
-      "date": "2026 10",
-      "title": "架构自测",
-      "text": "",
-      "image": "data/photos/mTEST.jpg",
-      "tags": [],
-      "script": "",
-      "jp": ""
-    }
-  ],
+  "memories": [],
   "settings": {
     "savedAt": 1792635395772,
     "cover": "",
