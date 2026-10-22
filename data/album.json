@@ -1,16 +1,5 @@
 {
-  "memories": [
-    {
-      "id": "mTEST",
-      "date": "2026 10",
-      "title": "上传链路自测",
-      "text": "",
-      "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
-      "tags": [],
-      "script": "",
-      "jp": ""
-    }
-  ],
+  "memories": [],
   "settings": {
     "cover": "",
     "siteEdits": {},
