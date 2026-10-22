@@ -1413,15 +1413,17 @@
     }
     if (cloudData) {
       applyCloudSettings(cloudData.settings);
-      customs = cloudData.memories;
-      try { await dbReplaceAll(customs); } catch (e) {}
 
-      /* 一次性补传：以前只存在本机、云端还没有的照片，自动推上云端 */
+      /* 先读出本机旧照片（必须在覆盖本机之前读，否则会丢） */
+      let localItems = [];
+      try { localItems = await storeAll(); } catch (e) {}
+      customs = cloudData.memories;
+
+      /* 一次性补传：本机有、云端还没有的照片，自动推上云端 */
       let hasToken = false;
       try { hasToken = !!(window.CLOUD && window.CLOUD.token) || !!localStorage.getItem('gh_album_token'); } catch (e) {}
-      if (hasToken) {
+      if (hasToken && localItems.length) {
         try {
-          const localItems = await storeAll();
           const ids = new Set(customs.map((m) => String(m.id)));
           const missing = localItems.filter((m) => !ids.has(String(m.id))).slice(0, 30);
           for (const m of missing) {
@@ -1430,11 +1432,9 @@
               customs.unshift(row);
             } catch (e) { break; }
           }
-          if (missing.length) {
-            try { await dbReplaceAll(customs); } catch (e) {}
-          }
         } catch (e) {}
       }
+      try { await dbReplaceAll(customs); } catch (e) {}
     }
 
     initSite();
