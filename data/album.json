@@ -1,5 +1,16 @@
 {
-  "memories": [],
+  "memories": [
+    {
+      "id": "mmvizzzoyb1cmb",
+      "date": "2026 · 10 月",
+      "title": "",
+      "text": "",
+      "image": "data/photos/mmvizzzoyb1cmb.jpg",
+      "tags": [],
+      "script": "",
+      "jp": ""
+    }
+  ],
   "settings": {
     "savedAt": 1792640657576,
     "cover": "",
