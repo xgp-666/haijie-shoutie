@@ -123,7 +123,9 @@
      GitHub 单文件写入上限约 1MB，把照片 base64 塞进同一个 album.json 会超限被拒，
      所以改成「每张照片一个文件」，album.json 只记路径，保证多次上传都成功。 */
   const PHOTO_DIR = 'data/photos';
-  const PAGES_BASE = 'https://' + REPO.split('/')[0] + '.github.io/' + REPO.split('/')[1] + '/';
+  /* 照片用 raw.githubusercontent.com 直接取仓库最新文件：提交后几秒即可见，
+     不像 GitHub Pages 要等 1~3 分钟重新构建，避免另一台手机“看不到照片”。 */
+  const RAW_BASE = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/';
 
   function parseDataUrl(dataUrl) {
     const m = /^data:(image\/\w+);base64,(.+)$/.exec(dataUrl);
@@ -135,7 +137,7 @@
   function resolveImage(url) {
     if (!url) return url;
     if (url.indexOf('data:') === 0 || url.indexOf('http') === 0) return url;
-    return PAGES_BASE + url;
+    return RAW_BASE + url;
   }
   async function putPhotoFile(id, dataUrl) {
     const p = parseDataUrl(dataUrl);
@@ -274,7 +276,12 @@
     if (!(await ensureToken())) return false;
     const d = await readData();
     const obj = JSON.parse(b64decodeUtf8(d.content));
-    obj.diag = Object.assign({}, info, { ts: Date.now() });
+    const stamped = Object.assign({}, info, { ts: Date.now() });
+    obj.diag = stamped;
+    // 按设备分别保存，方便分别查看两台手机各自的真实状态
+    obj.diagDevices = obj.diagDevices || {};
+    const dev = (info && info._dev) || 'unknown';
+    obj.diagDevices[dev] = stamped;
     await writeObj(obj, d.sha);
     return true;
   }
