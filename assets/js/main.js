@@ -652,13 +652,18 @@
     return (typeof SLIDES !== 'undefined' ? SLIDES : []).map((s, i) => Object.assign({}, s, arr[i] || {}));
   }
 
+  /* 轮播可重复初始化：每次云端有更新时重建，而不重复绑定全局事件 */
+  let __slideGo = null, __slidePause = null, __slideResume = null;
   function initSlideshow() {
     const viewport = $('slideViewport');
     if (!viewport) return;
+    viewport.innerHTML = '';
+    const dotsBox = $('slideDots'); if (dotsBox) dotsBox.innerHTML = '';
     const list = getSlides();
-    if (!list.length) { $('slideshow').style.display = 'none'; return; }
+    const ss = $('slideshow');
+    if (!list.length) { if (ss) ss.style.display = 'none'; return; }
+    if (ss) ss.style.display = '';
 
-    const dotsBox = $('slideDots');
     const caption = $('slideCaption');
     let index = 0, timer = null;
     const slides = [];
@@ -696,21 +701,71 @@
       if (typeof SLIDE_INTERVAL !== 'undefined' && SLIDE_INTERVAL > 0) timer = setInterval(() => go(index + 1), SLIDE_INTERVAL);
     }
 
-    if (caption) caption.textContent = list[0].caption || '';
-    $('slidePrev').addEventListener('click', () => go(index - 1, true));
-    $('slideNext').addEventListener('click', () => go(index + 1, true));
-    const box = $('slideshow');
-    box.addEventListener('mouseenter', () => clearInterval(timer));
-    box.addEventListener('mouseleave', restart);
+    __slideGo = (delta) => go(index + delta, true);
+    __slidePause = () => clearInterval(timer);
+    __slideResume = restart;
 
-    let startX = 0;
-    viewport.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; }, { passive: true });
-    viewport.addEventListener('touchend', (e) => {
-      const dx = e.changedTouches[0].clientX - startX;
-      if (Math.abs(dx) > 40) go(index + (dx < 0 ? 1 : -1), true);
-    }, { passive: true });
+    if (caption) caption.textContent = list[0].caption || '';
+    const box = $('slideshow');
+    if (!box.dataset.wired) {
+      $('slidePrev').addEventListener('click', () => __slideGo && __slideGo(-1));
+      $('slideNext').addEventListener('click', () => __slideGo && __slideGo(1));
+      box.addEventListener('mouseenter', () => __slidePause && __slidePause());
+      box.addEventListener('mouseleave', () => __slideResume && __slideResume());
+      box.dataset.wired = '1';
+    }
+    if (!viewport.dataset.touchWired) {
+      let startX = 0;
+      viewport.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; }, { passive: true });
+      viewport.addEventListener('touchend', (e) => {
+        const dx = e.changedTouches[0].clientX - startX;
+        if (Math.abs(dx) > 40 && __slideGo) __slideGo(dx < 0 ? 1 : -1);
+      }, { passive: true });
+      viewport.dataset.touchWired = '1';
+    }
 
     restart();
+  }
+
+  /* ======================================================================
+   * 七·五、后台自动同步：每隔几秒拉一次云端，对方改了就自动更新本机
+   *        （不用手动刷新，满足「一个人改了另一个人随时看到」）
+   * ==================================================================== */
+  let lastCloudSig = '';
+  async function cloudPoll() {
+    if (!cloudOn()) return;
+    if (document.querySelector('.sheet.open') || document.body.classList.contains('is-locked')) return; // 正在编辑/预览时不打断
+    try {
+      const data = await AlbumCloud.load();
+      const memIds = (data.memories || []).map((m) => String(m.id)).join(',');
+      const sAt = data.settings ? (data.settings.savedAt || 0) : 0;
+      const sig = memIds + '|' + sAt;
+      if (sig === lastCloudSig) return;       // 没变化就不打扰
+      lastCloudSig = sig;
+
+      if (data.settings) applyCloudSettings(data.settings);
+
+      // 合并：云端照片 + 本机独有（还没同步上去的）照片
+      let localItems = [];
+      try { localItems = await storeAll(); } catch (e) {}
+      const byId = new Map();
+      (data.memories || []).forEach((m) => byId.set(String(m.id), m));
+      localItems.forEach((m) => { if (!byId.has(String(m.id))) byId.set(String(m.id), m); });
+      customs = Array.from(byId.values());
+      try { await dbReplaceAll(customs); } catch (e) {}
+
+      buildWorkingMemories();
+      initTimeline();
+      // 轮播 / 封面 / 站点文字 / 主题：有变化就重建
+      try {
+        const vp = $('slideViewport'), db = $('slideDots');
+        if (vp) vp.innerHTML = ''; if (db) db.innerHTML = '';
+        initSlideshow();
+        applySavedCover();
+        initSite();
+        applyThemeEdits();
+      } catch (e) {}
+    } catch (e) {}
   }
 
   /* ======================================================================
@@ -1555,7 +1610,7 @@
           let localMem = 0;
           try { localMem = (await storeAll()).length; } catch (e) {}
           AlbumCloud.saveDiag({
-            v: 'g',
+            v: 'h',
             swCtrl: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
             cloudOn: cloudOn(),
             token: !!(window.CLOUD && window.CLOUD.tokenParts) || !!localStorage.getItem('gh_album_token'),
@@ -1570,6 +1625,16 @@
         }
       } catch (e) {}
     }
+    /* 后台自动同步：对方改了内容/照片，本机每隔几秒自动拉取并刷新（无需手动刷新） */
+    if (cloudOn()) {
+      try {
+        const memIds = (cloudData && cloudData.memories ? cloudData.memories : []).map((m) => String(m.id)).join(',');
+        const sAt = cloudData && cloudData.settings ? (cloudData.settings.savedAt || 0) : 0;
+        lastCloudSig = memIds + '|' + sAt;
+      } catch (e) {}
+      setInterval(cloudPoll, 12000);
+    }
+
     initInstall();
   })();
 })();
