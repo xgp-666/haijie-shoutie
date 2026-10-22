@@ -928,13 +928,15 @@
       let useCloud = false;
       try { useCloud = cloudOn() && (await AlbumCloud.ensureToken()); } catch (e) { useCloud = false; }
 
+      let cloudErr = '';   // 记录云端真实失败原因（不再假装成功）
       try {
         if (editingItem && editingItem.custom) {
           // 改的是自己贴的那页
           const old = customs.find((x) => x.id === editingItem.id) || {};
           const updated = Object.assign({}, old, payload);
           if (useCloud) {
-            await AlbumCloud.update(editingItem.id, AlbumCloud.toRow(updated));
+            try { await AlbumCloud.update(editingItem.id, AlbumCloud.toRow(updated)); }
+            catch (e) { cloudErr = (e && e.message) ? e.message : String(e); }
             try { await storePut(updated); } catch (e) {}   // 云端失败时本机也留底
             customs = customs.map((x) => (x.id === updated.id ? updated : x));
           } else {
@@ -953,16 +955,20 @@
           let row = payload;
           if (useCloud) {
             try { row = await AlbumCloud.insert(AlbumCloud.toRow(payload)); }
-            catch (e) { row = payload; }
+            catch (e) { cloudErr = (e && e.message) ? e.message : String(e); row = payload; }
           }
           customs.unshift(row);
         }
+        if (cloudErr) { try { AlbumCloud.saveLastErr(cloudErr, 'upload'); } catch (e) {} }
         refresh();
         closeSheet();
         resetSheet();
         if (!editingItem) {
           window.scrollTo({ top: $('gallery').offsetTop - 20, behavior: reduceMotion ? 'auto' : 'smooth' });
-          if (useCloud) {
+          if (useCloud && cloudErr) {
+            alert('⚠ 云端同步失败了，照片只留在这台手机\n\n失败原因：' + cloudErr +
+              '\n\n（这条原因已经自动上报，方便修复。你可以先把这段话发给帮我修的人。）');
+          } else if (useCloud) {
             alert('贴好啦～\n已经同步到云端，另一台手机打开这个网址（或刷新一下）就能看到。');
           } else {
             alert('贴好啦～\n注意：照片先存到了这台设备的浏览器里。\n要和对方共享，需要在弹窗里粘贴一把 GitHub 令牌（只作用于这个相册仓库）。\n只自己看也行，用页脚「固化到相册」可导出备份。');
@@ -1623,7 +1629,7 @@
           try { localMem = (await storeAll()).length; } catch (e) {}
           AlbumCloud.saveDiag({
             _dev: deviceId,
-            v: 'i',
+            v: 'j',
             swCtrl: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
             cloudOn: cloudOn(),
             token: !!(window.CLOUD && window.CLOUD.tokenParts) || !!localStorage.getItem('gh_album_token'),
