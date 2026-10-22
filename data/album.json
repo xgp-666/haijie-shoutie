@@ -9,5 +9,19 @@
     "memEdits": {},
     "slides": {},
     "theme": {}
+  },
+  "diag": {
+    "v": "e",
+    "swCtrl": true,
+    "cloudOn": true,
+    "token": true,
+    "localMem": 0,
+    "cloudMem": 0,
+    "slidesLocal": 4,
+    "slideSaved": true,
+    "quotaOk": true,
+    "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like G",
+    "err": "",
+    "ts": 1792635344876
   }
 }
