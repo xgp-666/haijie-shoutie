@@ -874,6 +874,7 @@
           const updated = Object.assign({}, old, payload);
           if (useCloud) {
             await AlbumCloud.update(editingItem.id, AlbumCloud.toRow(updated));
+            try { await storePut(updated); } catch (e) {}   // 云端失败时本机也留底
             customs = customs.map((x) => (x.id === updated.id ? updated : x));
           } else {
             await storePut(updated);
@@ -885,14 +886,15 @@
           saveJSON(MEM_EDIT_KEY, memEdits);
           syncSettings();
         } else {
-          // 新贴一页
+          // 新贴一页：本机永远留底，云端再同步（云端失败也不丢）
+          payload.id = payload.id || ('m' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7));
+          await storeAdd(payload);
+          let row = payload;
           if (useCloud) {
-            const row = await AlbumCloud.insert(AlbumCloud.toRow(payload));
-            customs.unshift(row);
-          } else {
-            payload.id = await storeAdd(payload);
-            customs.push(payload);
+            try { row = await AlbumCloud.insert(AlbumCloud.toRow(payload)); }
+            catch (e) { row = payload; }
           }
+          customs.unshift(row);
         }
         refresh();
         closeSheet();
@@ -1553,7 +1555,7 @@
           let localMem = 0;
           try { localMem = (await storeAll()).length; } catch (e) {}
           AlbumCloud.saveDiag({
-            v: 'e',
+            v: 'g',
             swCtrl: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
             cloudOn: cloudOn(),
             token: !!(window.CLOUD && window.CLOUD.tokenParts) || !!localStorage.getItem('gh_album_token'),
