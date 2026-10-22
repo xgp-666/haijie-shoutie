@@ -12,7 +12,7 @@
   },
   "diag": {
     "v": "e",
-    "swCtrl": true,
+    "swCtrl": false,
     "cloudOn": true,
     "token": true,
     "localMem": 0,
@@ -20,8 +20,8 @@
     "slidesLocal": 4,
     "slideSaved": true,
     "quotaOk": true,
-    "ua": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like G",
+    "ua": "Mozilla/5.0 (Linux; Android 12; ADY-AL00 Build/HUAWEIADY-AL00; wv) AppleWebKit/537.36 (KHT",
     "err": "",
-    "ts": 1792635344876
+    "ts": 1792635496880
   }
 }
