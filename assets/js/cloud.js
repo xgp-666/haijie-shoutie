@@ -183,5 +183,15 @@
   /* 兼容旧接口：照片已是 data URL，原样返回 */
   async function uploadImage(dataUrl) { return dataUrl; }
 
-  window.AlbumCloud = { enabled, ensureToken, list, load, saveSettings, insert, update, remove, uploadImage, normalize, toRow };
+  /* 自动体检：把本机诊断信息写进云端（远程排查用，不含照片内容） */
+  async function saveDiag(info) {
+    if (!(await ensureToken())) return false;
+    const d = await readData();
+    const obj = JSON.parse(b64decodeUtf8(d.content));
+    obj.diag = Object.assign({}, info, { ts: Date.now() });
+    await writeObj(obj, d.sha);
+    return true;
+  }
+
+  window.AlbumCloud = { enabled, ensureToken, list, load, saveSettings, insert, update, remove, uploadImage, normalize, toRow, saveDiag };
 })();
