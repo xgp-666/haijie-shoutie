@@ -18,7 +18,8 @@
   function getToken() {
     const fromLS = (localStorage.getItem(TOKEN_KEY) || '').trim();
     if (fromLS) return fromLS;
-    return ((C.token) || '').trim();   // 已内嵌则直接用，无需手动粘贴
+    const emb = (C.tokenParts && Array.isArray(C.tokenParts)) ? C.tokenParts.join('') : (C.token || '');
+    return (emb || '').trim();   // 已内嵌则直接用，无需手动粘贴
   }
   function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
 
