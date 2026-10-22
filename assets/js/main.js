@@ -220,14 +220,50 @@
     if (cloudOn()) {
       try {
         const rows = await AlbumCloud.list();
-        const list = rows.map(AlbumCloud.rowToMemory);
-        try { await dbReplaceAll(list); } catch (e) {}   // 本机留一份，断网也能翻
-        return list;
+        try { await dbReplaceAll(rows); } catch (e) {}   // 本机留一份，断网也能翻
+        return rows;
       } catch (e) {
         console.warn('云端拉取失败，先用本机数据', e);
       }
     }
     return await storeAll();
+  }
+
+  /* ---- 云端同步「整本手账的设置」：封面 / 轮播 / 改过的文字 / 主题 ----
+     这些之前只存在本机浏览器，所以两台设备不同步；现在一起放进云端。 */
+  function collectSettings() {
+    let cover = '';
+    try { cover = localStorage.getItem(COVER_KEY) || ''; } catch (e) {}
+    return {
+      cover: cover,
+      siteEdits: loadJSON(SITE_EDIT_KEY),
+      memEdits: memEdits,
+      slides: loadJSON(SLIDE_EDIT_KEY),
+      theme: themeEdits
+    };
+  }
+
+  function applyCloudSettings(s) {
+    if (!s || typeof s !== 'object') return;
+    try { if (s.cover) localStorage.setItem(COVER_KEY, s.cover); } catch (e) {}
+    if (s.siteEdits && typeof s.siteEdits === 'object') saveJSON(SITE_EDIT_KEY, s.siteEdits);
+    if (s.memEdits && typeof s.memEdits === 'object') { memEdits = s.memEdits; saveJSON(MEM_EDIT_KEY, memEdits); }
+    if (s.slides && typeof s.slides === 'object') saveJSON(SLIDE_EDIT_KEY, s.slides);
+    if (s.theme && typeof s.theme === 'object') {
+      themeEdits = s.theme;
+      saveJSON(THEME_KEY, s.theme);
+      if (s.theme.mode) { try { localStorage.setItem('album-theme', s.theme.mode); } catch (e) {} }
+    }
+  }
+
+  let syncTimer = null;
+  function syncSettings() {
+    if (!cloudOn()) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(async () => {
+      try { await AlbumCloud.saveSettings(collectSettings()); }
+      catch (e) { if (e && e.message !== 'NO_TOKEN') console.warn('设置同步失败', e); }
+    }, 800);
   }
 
   /* ---- 本机改过的文字（data.js 里的固定条目也能改，改完存在浏览器里） ---- */
@@ -240,8 +276,9 @@
   let memEdits = loadJSON(MEM_EDIT_KEY);
 
   function buildWorkingMemories() {
-    // 上传的按 id 倒序（最新贴的排最上）
-    const sorted = customs.slice().sort((a, b) => b.id - a.id)
+    // 上传的按 id 倒序（最新贴的排最上；兼容数字 id 和云端字符串 id）
+    const rank = (m) => (typeof m.id === 'number' ? m.id : (parseInt(String(m.id).replace(/\D/g, ''), 36) || 0));
+    const sorted = customs.slice().sort((a, b) => rank(b) - rank(a))
       .map((m) => ({ custom: true, id: m.id, date: m.date, title: m.title, text: m.text, image: m.image, alt: m.alt || m.title || '', tags: m.tags || [], script: m.script || '', jp: m.jp || '' }));
 
     // data.js 里的固定回忆：套用本机改过的文字 / 隐藏标记
@@ -524,6 +561,7 @@
           if (!confirm('撕下这一页？之后可在页脚「恢复默认」找回。')) return;
           memEdits[String(m.fixedIndex)] = Object.assign({}, memEdits[String(m.fixedIndex)], { hidden: true });
           saveJSON(MEM_EDIT_KEY, memEdits);
+          syncSettings();
         }
         refresh();
       });
@@ -805,21 +843,22 @@
           const old = customs.find((x) => x.id === editingItem.id) || {};
           const updated = Object.assign({}, old, payload);
           if (useCloud) {
-            await AlbumCloud.update(editingItem.id, AlbumCloud.memoryToRow(updated));
+            await AlbumCloud.update(editingItem.id, AlbumCloud.toRow(updated));
             customs = customs.map((x) => (x.id === updated.id ? updated : x));
           } else {
             await storePut(updated);
             customs = customs.map((x) => (x.id === updated.id ? updated : x));
           }
         } else if (editingItem) {
-          // 改的是 data.js 里的固定那页：只把改动存本机，不动源文件
+          // 改的是 data.js 里的固定那页：改动存云端（有令牌时），本机也留一份
           memEdits[String(editingItem.fixedIndex)] = Object.assign({}, memEdits[String(editingItem.fixedIndex)], payload);
           saveJSON(MEM_EDIT_KEY, memEdits);
+          syncSettings();
         } else {
           // 新贴一页
           if (useCloud) {
-            const row = await AlbumCloud.insert(AlbumCloud.memoryToRow(payload));
-            customs.unshift(AlbumCloud.rowToMemory(row));
+            const row = await AlbumCloud.insert(AlbumCloud.toRow(payload));
+            customs.unshift(row);
           } else {
             payload.id = await storeAdd(payload);
             customs.push(payload);
@@ -985,6 +1024,7 @@
         o[key] = el.textContent.replace(/\s+/g, ' ').trim();
         saveJSON(SITE_EDIT_KEY, o);
         if (key === 'title') document.title = o[key] + ' · 回忆手账';
+        syncSettings();
       };
       el.addEventListener('blur', save);
       el.addEventListener('keydown', (ev) => {
@@ -1013,19 +1053,27 @@
         const dataUrl = await compressImage(file);
         try { localStorage.setItem(COVER_KEY, dataUrl); } catch (err) { alert('封面太大，浏览器存不下，换小一点的图试试'); return; }
         if ($('heroImg')) $('heroImg').src = dataUrl;
-        alert('封面换好了～只在这台设备生效；想永久生效，用页脚「固化到相册」一起导出。');
+        if (cloudOn()) {
+          syncSettings();
+          alert('封面换好了～正在同步到云端，另一台设备刷新就能看到。');
+        } else {
+          alert('封面换好了～只在这台设备生效；想永久生效，用页脚「固化到相册」一起导出。');
+        }
       } catch (err) {
         alert('这张图片读不出来，换一张试试？');
       } finally { e.target.value = ''; }
     });
 
-    $('resetBtn').addEventListener('click', () => {
-      if (!confirm('恢复默认？会用 data.js 里的原始内容覆盖本机改过的文字、封面和撕下的页面（上传的照片不受影响）。')) return;
+    $('resetBtn').addEventListener('click', async () => {
+      if (!confirm('恢复默认？会用 data.js 里的原始内容覆盖改过的文字、封面和撕下的页面，并同步到所有设备（上传的照片不受影响）。')) return;
       try {
         localStorage.removeItem(MEM_EDIT_KEY);
         localStorage.removeItem(SITE_EDIT_KEY);
         localStorage.removeItem(COVER_KEY);
       } catch (e) {}
+      if (cloudOn()) {
+        try { await AlbumCloud.saveSettings({}); } catch (e) {}
+      }
       location.reload();
     });
   }
@@ -1091,10 +1139,11 @@
       } finally { e.target.value = ''; }
     });
 
-    $('slideForm').addEventListener('submit', (e) => {
+    $('slideForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       saveJSON(SLIDE_EDIT_KEY, { slides: slideTemp });
       closeSlideSheet();
+      if (cloudOn()) { try { await AlbumCloud.saveSettings(collectSettings()); } catch (err) {} }
       setTimeout(() => location.reload(), 350);
     });
   }
@@ -1267,6 +1316,7 @@
       themeEdits = next;
       saveJSON(THEME_KEY, next);
       applyThemeEdits();
+      syncSettings();
       closeTheme();
     });
 
@@ -1303,6 +1353,7 @@
       t.mode = now;
       themeEdits = t;
       saveJSON(THEME_KEY, t);
+      syncSettings();
     });
   }
   function initTopbar() {
@@ -1354,10 +1405,42 @@
    * 启动
    * ==================================================================== */
   (async function start() {
+    /* 先拉云端（照片 + 封面/轮播/文字/主题设置），再初始化页面 */
+    let cloudData = null;
+    if (cloudOn()) {
+      try { cloudData = await AlbumCloud.load(); }
+      catch (e) { console.warn('云端拉取失败，先用本机数据', e); }
+    }
+    if (cloudData) {
+      applyCloudSettings(cloudData.settings);
+      customs = cloudData.memories;
+      try { await dbReplaceAll(customs); } catch (e) {}
+
+      /* 一次性补传：以前只存在本机、云端还没有的照片，自动推上云端 */
+      let hasToken = false;
+      try { hasToken = !!localStorage.getItem('gh_album_token'); } catch (e) {}
+      if (hasToken) {
+        try {
+          const localItems = await storeAll();
+          const ids = new Set(customs.map((m) => String(m.id)));
+          const missing = localItems.filter((m) => !ids.has(String(m.id))).slice(0, 30);
+          for (const m of missing) {
+            try {
+              const row = await AlbumCloud.insert(AlbumCloud.toRow(m));
+              customs.unshift(row);
+            } catch (e) { break; }
+          }
+          if (missing.length) {
+            try { await dbReplaceAll(customs); } catch (e) {}
+          }
+        } catch (e) {}
+      }
+    }
+
     initSite();
     applySavedCover();
     initEditableTexts();
-    applyThemeEdits();     // 本机改过的配色 / 明暗 / 字体
+    applyThemeEdits();     // 配色 / 明暗 / 字体（云端优先，其次本机）
     initThemePanel();
     initTheme();
     initTopbar();
@@ -1367,10 +1450,11 @@
     initSheet();
     initBackup();
     initCoverAndReset();
-    try { customs = await loadCustoms(); } catch (e) { customs = []; }
+    if (!cloudData) {
+      try { customs = await loadCustoms(); } catch (e) { customs = []; }
+    }
     buildWorkingMemories();
     initTimeline();
-    initCloudStatus();
 
     /* 注册离线缓存（手机「添加到主屏幕」后也能离线打开） */
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
