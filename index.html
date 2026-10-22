@@ -139,6 +139,8 @@
     <p class="footer__line" id="footerLine" data-editable="footer"></p>
     <p class="footer__tip" id="footerTip" data-editable="footerTip"></p>
     <p class="footer__ops">
+      <button id="syncBtn" type="button">☁ 同步到云端</button>
+      <span class="sep">·</span>
       <button id="exportBtn" type="button">导出备份</button>
       <span class="sep">·</span>
       <button id="importBtn" type="button">导入备份</button>
@@ -155,6 +157,7 @@
       <input type="file" id="importInput" accept=".json,application/json" hidden>
       <input type="file" id="coverInput" accept="image/*" hidden>
     </p>
+    <p class="footer__status" id="syncStatus"></p>
   </footer>
 
   <!-- ===================== 「写一页」上传弹层 ===================== -->
