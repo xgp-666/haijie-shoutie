@@ -1,5 +1,16 @@
 {
-  "memories": [],
+  "memories": [
+    {
+      "id": "mPROBE",
+      "date": "2026 10",
+      "title": "链路自检",
+      "text": "",
+      "image": "data:image/png;base64,iVBORw0KGgo=",
+      "tags": [],
+      "script": "",
+      "jp": ""
+    }
+  ],
   "settings": {
     "cover": "",
     "siteEdits": {},
