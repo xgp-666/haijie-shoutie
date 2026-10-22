@@ -1491,9 +1491,14 @@
     buildWorkingMemories();
     initTimeline();
 
-    /* 注册离线缓存（手机「添加到主屏幕」后也能离线打开） */
-    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+    /* 注销旧 service worker：它缓存优先旧 JS，会挡住每次部署的新代码。
+       注销后页面每次都从 GitHub Pages 拉最新，保证两台手机都跑同一份云同步代码。
+       （代价：失去离线打开，换来可靠的跨设备同步，更划算） */
+    if ('serviceWorker' in navigator) {
+      try {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const r of regs) { try { await r.unregister(); } catch (e) {} }
+      } catch (e) {}
     }
     initInstall();
   })();
