@@ -130,12 +130,28 @@
     return { memories: (obj.memories || []).map(normalize), settings: obj.settings || null };
   }
 
-  /* 保存整本手账的设置（保留 memories 不动） */
-  async function saveSettings(settings) {
+  /* 保存整本手账的设置（保留 memories 不动）
+     默认「逐项合并」：本机有值才覆盖云端，本机为空则保留云端现有的，
+     避免一台设备把另一台设备的设置（轮播、封面、主题）整份抹掉。 */
+  function nonEmpty(v) {
+    if (v == null) return false;
+    if (typeof v === 'string') return v.length > 0;
+    if (typeof v === 'object') return Object.keys(v).length > 0;
+    return true;
+  }
+  async function saveSettings(settings, merge) {
     if (!(await ensureToken())) throw new Error('NO_TOKEN');
     const d = await readData();
     const obj = JSON.parse(b64decodeUtf8(d.content));
-    obj.settings = settings;
+    if (merge) {
+      const base = obj.settings || {};
+      const out = Object.assign({}, base);
+      Object.keys(settings || {}).forEach((k) => { if (nonEmpty(settings[k])) out[k] = settings[k]; });
+      out.savedAt = (settings && settings.savedAt) ? settings.savedAt : (base.savedAt || 0);
+      obj.settings = out;
+    } else {
+      obj.settings = settings;
+    }
     await writeObj(obj, d.sha);
     return true;
   }
