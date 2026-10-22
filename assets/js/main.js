@@ -1418,7 +1418,7 @@
 
       /* 一次性补传：以前只存在本机、云端还没有的照片，自动推上云端 */
       let hasToken = false;
-      try { hasToken = !!localStorage.getItem('gh_album_token'); } catch (e) {}
+      try { hasToken = !!(window.CLOUD && window.CLOUD.token) || !!localStorage.getItem('gh_album_token'); } catch (e) {}
       if (hasToken) {
         try {
           const localItems = await storeAll();
