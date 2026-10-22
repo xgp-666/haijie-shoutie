@@ -273,11 +273,13 @@
     const cloudAt = parseInt(s.savedAt || 0, 10) || 0;
     if (cloudAt && cloudAt < getSettingsAt()) return;
     if (cloudAt) setSettingsAt(cloudAt);
+    /* 逐项应用，且云端该项为空时不覆盖本机（防止被别的设备/旧数据清空） */
+    const has = (v) => (v && typeof v === 'object') ? Object.keys(v).length > 0 : !!v;
     try { if (s.cover) localStorage.setItem(COVER_KEY, s.cover); } catch (e) {}
-    if (s.siteEdits && typeof s.siteEdits === 'object') saveJSON(SITE_EDIT_KEY, s.siteEdits);
-    if (s.memEdits && typeof s.memEdits === 'object') { memEdits = s.memEdits; saveJSON(MEM_EDIT_KEY, memEdits); }
-    if (s.slides && typeof s.slides === 'object') saveJSON(SLIDE_EDIT_KEY, s.slides);
-    if (s.theme && typeof s.theme === 'object') {
+    if (has(s.siteEdits)) saveJSON(SITE_EDIT_KEY, s.siteEdits);
+    if (has(s.memEdits)) { memEdits = s.memEdits; saveJSON(MEM_EDIT_KEY, memEdits); }
+    if (s.slides && s.slides.slides && s.slides.slides.length) saveJSON(SLIDE_EDIT_KEY, s.slides);
+    if (has(s.theme)) {
       themeEdits = s.theme;
       saveJSON(THEME_KEY, s.theme);
       if (s.theme.mode) { try { localStorage.setItem('album-theme', s.theme.mode); } catch (e) {} }
@@ -289,7 +291,7 @@
     if (!cloudOn()) return;
     clearTimeout(syncTimer);
     syncTimer = setTimeout(async () => {
-      try { await AlbumCloud.saveSettings(collectSettings()); }
+      try { await AlbumCloud.saveSettings(collectSettings(), true); }   // true = 逐项合并，不抹掉别的设备
       catch (e) { if (e && e.message !== 'NO_TOKEN') console.warn('设置同步失败', e); }
     }, 800);
   }
@@ -1209,7 +1211,7 @@
         return;
       }
       closeSlideSheet();
-      if (cloudOn()) { try { await AlbumCloud.saveSettings(collectSettings()); } catch (err) {} }
+      if (cloudOn()) { try { await AlbumCloud.saveSettings(collectSettings(), true); } catch (err) {} }
       setTimeout(() => location.reload(), 350);
     });
   }
