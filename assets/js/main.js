@@ -10,6 +10,16 @@
 (function () {
   'use strict';
 
+  /* 全局报错捕获：页面任何报错都记下来，随「自动体检」上报云端，便于远程排查 */
+  window.__albumErr = '';
+  window.addEventListener('error', (e) => {
+    window.__albumErr = String((e && e.message) || 'unknown').slice(0, 140) + ' @L' + ((e && e.lineno) || '?');
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    const r = e && e.reason;
+    window.__albumErr = 'promise: ' + String((r && r.message) || r || 'unknown').slice(0, 140);
+  });
+
   const $ = (id) => document.getElementById(id);
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -1525,6 +1535,35 @@
       try {
         const regs = await navigator.serviceWorker.getRegistrations();
         for (const r of regs) { try { await r.unregister(); } catch (e) {} }
+      } catch (e) {}
+    }
+
+    /* 自动体检：把本机状态上报到云端（不含照片内容），每 3 分钟最多一次。
+       这样不需要你在手机上描述，我直接读云端就能看到你手机的真实情况。 */
+    if (cloudOn()) {
+      try {
+        const last = parseInt(sessionStorage.getItem('diagAt') || '0', 10) || 0;
+        if (Date.now() - last > 180000) {
+          sessionStorage.setItem('diagAt', String(Date.now()));
+          let quotaOk = true;
+          try { localStorage.setItem('__qtest', 'x'.repeat(50000)); localStorage.removeItem('__qtest'); }
+          catch (e) { quotaOk = false; }
+          let localMem = 0;
+          try { localMem = (await storeAll()).length; } catch (e) {}
+          AlbumCloud.saveDiag({
+            v: 'e',
+            swCtrl: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
+            cloudOn: cloudOn(),
+            token: !!(window.CLOUD && window.CLOUD.tokenParts) || !!localStorage.getItem('gh_album_token'),
+            localMem: localMem,
+            cloudMem: customs.length,
+            slidesLocal: getSlides().length,
+            slideSaved: !!localStorage.getItem(SLIDE_EDIT_KEY),
+            quotaOk: quotaOk,
+            ua: (navigator.userAgent || '').slice(0, 90),
+            err: window.__albumErr || ''
+          }).catch(() => {});
+        }
       } catch (e) {}
     }
     initInstall();
