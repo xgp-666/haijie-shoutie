@@ -95,11 +95,11 @@
     return await r.json(); // 含 sha 与 content
   }
 
-  async function writeData(memories, sha, attempt) {
+  async function writeObj(obj, sha, attempt) {
     attempt = attempt || 0;
     const payload = {
       message: '相册更新 ' + new Date().toISOString(),
-      content: b64encodeUtf8(JSON.stringify({ memories: memories }, null, 2)),
+      content: b64encodeUtf8(JSON.stringify(obj, null, 2)),
       branch: BRANCH
     };
     if (sha) payload.sha = sha;
@@ -108,10 +108,31 @@
     } catch (e) {
       if (attempt < 2 && /sha|409|changed/i.test(e.message)) {
         const fresh = await readData();
-        return writeData(memories, fresh.sha, attempt + 1);
+        return writeObj(obj, fresh.sha, attempt + 1);
       }
       throw e;
     }
+  }
+
+  async function writeData(memories, sha, attempt) {
+    return writeObj({ memories: memories }, sha, attempt);
+  }
+
+  /* 一次拉取： memories + settings（封面/轮播/文字/主题） */
+  async function load() {
+    const d = await readData();
+    const obj = JSON.parse(b64decodeUtf8(d.content));
+    return { memories: (obj.memories || []).map(normalize), settings: obj.settings || null };
+  }
+
+  /* 保存整本手账的设置（保留 memories 不动） */
+  async function saveSettings(settings) {
+    if (!(await ensureToken())) throw new Error('NO_TOKEN');
+    const d = await readData();
+    const obj = JSON.parse(b64decodeUtf8(d.content));
+    obj.settings = settings;
+    await writeObj(obj, d.sha);
+    return true;
   }
 
   async function list() {
@@ -157,5 +178,5 @@
   /* 兼容旧接口：照片已是 data URL，原样返回 */
   async function uploadImage(dataUrl) { return dataUrl; }
 
-  window.AlbumCloud = { enabled, ensureToken, list, insert, update, remove, uploadImage, normalize, toRow };
+  window.AlbumCloud = { enabled, ensureToken, list, load, saveSettings, insert, update, remove, uploadImage, normalize, toRow };
 })();
