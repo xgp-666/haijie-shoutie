@@ -123,9 +123,10 @@
      GitHub 单文件写入上限约 1MB，把照片 base64 塞进同一个 album.json 会超限被拒，
      所以改成「每张照片一个文件」，album.json 只记路径，保证多次上传都成功。 */
   const PHOTO_DIR = 'data/photos';
-  /* 照片用 raw.githubusercontent.com 直接取仓库最新文件：提交后几秒即可见，
-     不像 GitHub Pages 要等 1~3 分钟重新构建，避免另一台手机“看不到照片”。 */
-  const RAW_BASE = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/';
+  /* 照片用 GitHub Pages 域名（xgp-666.github.io）：
+     raw.githubusercontent.com 在中国大陆被墙，手机根本加载不出图片；
+     Pages 虽然新提交要等 1~3 分钟构建，但在国内能访问，所以用 Pages。 */
+  const PAGES_BASE = 'https://' + REPO.split('/')[0] + '.github.io/' + REPO.split('/')[1] + '/';
 
   function parseDataUrl(dataUrl) {
     const m = /^data:(image\/\w+);base64,(.+)$/.exec(dataUrl);
@@ -137,7 +138,7 @@
   function resolveImage(url) {
     if (!url) return url;
     if (url.indexOf('data:') === 0 || url.indexOf('http') === 0) return url;
-    return RAW_BASE + url;
+    return PAGES_BASE + url;
   }
   async function putPhotoFile(id, dataUrl) {
     const p = parseDataUrl(dataUrl);
@@ -196,14 +197,23 @@
     if (!(await ensureToken())) throw new Error('NO_TOKEN');
     const f = await readFull();
     const obj = f.obj;
+    let s = settings || {};
+    /* 封面若带整张图的 base64，会把 album.json 撑过 GitHub 1MB 上限导致写入被拒
+       （表现为“说同步了，另一台却看不到”）。改成：封面存成仓库独立文件，设置里只记路径。 */
+    if (s.cover && s.cover.indexOf('data:') === 0) {
+      try {
+        const p = await putPhotoFile('cover', s.cover);
+        if (p) s = Object.assign({}, s, { cover: p });
+      } catch (e) {}
+    }
     if (merge) {
       const base = obj.settings || {};
       const out = Object.assign({}, base);
-      Object.keys(settings || {}).forEach((k) => { if (nonEmpty(settings[k])) out[k] = settings[k]; });
-      out.savedAt = (settings && settings.savedAt) ? settings.savedAt : (base.savedAt || 0);
+      Object.keys(s).forEach((k) => { if (nonEmpty(s[k])) out[k] = s[k]; });
+      out.savedAt = (s && s.savedAt) ? s.savedAt : (base.savedAt || 0);
       obj.settings = out;
     } else {
-      obj.settings = settings;
+      obj.settings = s;
     }
     await commit(obj, f.sha);
     return true;
