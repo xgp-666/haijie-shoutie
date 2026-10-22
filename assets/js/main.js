@@ -921,7 +921,8 @@
         status.textContent = '同步失败：' + (e && e.message ? e.message : e);
       }
     }
-    $('syncBtn').addEventListener('click', doSync);
+    const syncBtn = $('syncBtn');
+    if (syncBtn) syncBtn.addEventListener('click', doSync);
 
     $('exportBtn').addEventListener('click', async () => {
       if (!customs.length) { alert('这台设备还没有上传过照片，无需备份。'); return; }
