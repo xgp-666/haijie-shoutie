@@ -1,3 +1,16 @@
 {
-  "memories": []
+  "memories": [
+    {
+      "id": "mTEST01",
+      "date": "2026 · 10 月",
+      "title": "云端同步测试",
+      "text": "hello from cloud",
+      "image": "data:image/png;base64,iVBORw0KGgo=",
+      "tags": [
+        "测试"
+      ],
+      "script": "",
+      "jp": ""
+    }
+  ]
 }
