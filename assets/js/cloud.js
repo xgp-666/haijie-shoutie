@@ -286,5 +286,19 @@
     return true;
   }
 
-  window.AlbumCloud = { enabled, ensureToken, list, load, saveSettings, insert, update, remove, uploadImage, normalize, toRow, saveDiag, resolveImage };
+  /* 把最近一次出错的原因写进云端，方便远程排查（不含照片内容） */
+  async function saveLastErr(msg, where) {
+    try {
+      if (!(await ensureToken())) return false;
+      let dev = '';
+      try { dev = localStorage.getItem('album_dev_id') || ''; } catch (e) {}
+      const d = await readData();
+      const obj = JSON.parse(b64decodeUtf8(d.content));
+      obj.lastErr = { ts: Date.now(), where: String(where || ''), msg: String(msg || ''), dev: dev };
+      await writeObj(obj, d.sha);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  window.AlbumCloud = { enabled, ensureToken, list, load, saveSettings, insert, update, remove, uploadImage, normalize, toRow, saveDiag, saveLastErr, resolveImage };
 })();
