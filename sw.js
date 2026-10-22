@@ -1,6 +1,6 @@
 /* 手账相册 · 离线缓存
    —— 静态站也能在手机上离线打开（照片仍在浏览器里，不受影响） */
-const CACHE = 'shiguang-journal-v2';
+const CACHE = 'shiguang-journal-v3';
 
 /* 首次安装时缓存的核心文件（改版后把上面的版本号 +1 即可刷新） */
 const CORE = [
@@ -39,27 +39,14 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   if (!req.url.startsWith(self.location.origin)) return;   // 外链不缓存
 
-  // 页面：网络优先（拿得到就用新的，离线时回退缓存）
-  if (req.mode === 'navigate') {
-    e.respondWith(
-      fetch(req).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put('./index.html', copy));
-        return res;
-      }).catch(() => caches.match('./index.html').then((r) => r || caches.match('./')))
-    );
-    return;
-  }
-
-  // 其它资源：缓存优先 + 后台更新
+  // 全部网络优先：拿到就用新的，离线时回退缓存（保证部署后立刻生效，不再被旧缓存挡住）
   e.respondWith(
-    caches.match(req).then((hit) => {
-      const net = fetch(req).then((res) => {
+    fetch(req).then((res) => {
+      if (res && res.ok && res.type === 'basic') {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(req, copy));
-        return res;
-      }).catch(() => hit);
-      return hit || net;
-    })
+      }
+      return res;
+    }).catch(() => caches.match(req).then((r) => r || caches.match('./index.html') || caches.match('./')))
   );
 });
