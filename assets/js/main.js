@@ -1164,6 +1164,8 @@
   function applySavedCover() {
     let saved = null;
     try { saved = localStorage.getItem(COVER_KEY); } catch (e) {}
+    /* 云端存的是仓库路径（data/photos/cover.jpg），要解析成完整 URL 才能显示 */
+    if (saved && window.AlbumCloud && AlbumCloud.resolveImage) saved = AlbumCloud.resolveImage(saved);
     if (saved && $('heroImg')) $('heroImg').src = saved;
   }
 
@@ -1629,7 +1631,7 @@
           try { localMem = (await storeAll()).length; } catch (e) {}
           AlbumCloud.saveDiag({
             _dev: deviceId,
-            v: 'j',
+            v: 'k',
             swCtrl: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
             cloudOn: cloudOn(),
             token: !!(window.CLOUD && window.CLOUD.tokenParts) || !!localStorage.getItem('gh_album_token'),
