@@ -73,7 +73,7 @@
       date: m.date || '',
       title: m.title || '',
       text: m.text || '',
-      image: m.image || '',
+      image: resolveImage(m.image || ''),
       alt: m.title || '',
       tags: m.tags || [],
       script: m.script || '',
@@ -119,8 +119,62 @@
     }
   }
 
-  async function writeData(memories, sha, attempt) {
-    return writeObj({ memories: memories }, sha, attempt);
+  /* ---- 照片独立存储：每张照片存成仓库里的独立文件，album.json 只留轻量路径 ----
+     GitHub 单文件写入上限约 1MB，把照片 base64 塞进同一个 album.json 会超限被拒，
+     所以改成「每张照片一个文件」，album.json 只记路径，保证多次上传都成功。 */
+  const PHOTO_DIR = 'data/photos';
+  const PAGES_BASE = 'https://' + REPO.split('/')[0] + '.github.io/' + REPO.split('/')[1] + '/';
+
+  function parseDataUrl(dataUrl) {
+    const m = /^data:(image\/\w+);base64,(.+)$/.exec(dataUrl);
+    if (!m) return null;
+    const ext = m[1] === 'image/png' ? 'png' : (m[1] === 'image/webp' ? 'webp' : (m[1] === 'image/gif' ? 'gif' : 'jpg'));
+    return { ext: ext, b64: m[2] };
+  }
+  /* 显示时把路径转成完整可访问的 URL（data: / http 原样返回） */
+  function resolveImage(url) {
+    if (!url) return url;
+    if (url.indexOf('data:') === 0 || url.indexOf('http') === 0) return url;
+    return PAGES_BASE + url;
+  }
+  async function putPhotoFile(id, dataUrl) {
+    const p = parseDataUrl(dataUrl);
+    if (!p) return '';
+    const path = PHOTO_DIR + '/' + id + '.' + p.ext;
+    const payload = { message: 'photo ' + id, content: p.b64, branch: BRANCH };
+    try { const ex = await ghJson('GET', '/repos/' + REPO + '/contents/' + path + '?ref=' + BRANCH); payload.sha = ex.sha; } catch (e) {}
+    await ghJson('PUT', '/repos/' + REPO + '/contents/' + path, payload);
+    return path;
+  }
+  async function deletePhotoFile(path) {
+    try {
+      const ex = await ghJson('GET', '/repos/' + REPO + '/contents/' + path + '?ref=' + BRANCH);
+      await ghJson('DELETE', '/repos/' + REPO + '/contents/' + path, { message: 'del ' + path, sha: ex.sha, branch: BRANCH });
+    } catch (e) {}
+  }
+
+  /* 统一写入：始终写整份对象（memories + settings + diag），避免互相覆盖 */
+  async function commit(fullObj, sha, attempt) {
+    attempt = attempt || 0;
+    const payload = {
+      message: '相册更新 ' + new Date().toISOString(),
+      content: b64encodeUtf8(JSON.stringify(fullObj, null, 2)),
+      branch: BRANCH
+    };
+    if (sha) payload.sha = sha;
+    try {
+      return await ghJson('PUT', '/repos/' + REPO + '/contents/' + DATA, payload);
+    } catch (e) {
+      if (attempt < 2 && /sha|409|changed/i.test(e.message)) {
+        const f = await readData();
+        return commit(fullObj, f.sha, attempt + 1);
+      }
+      throw e;
+    }
+  }
+  async function readFull() {
+    const d = await readData();
+    return { sha: d.sha, obj: JSON.parse(b64decodeUtf8(d.content)) };
   }
 
   /* 一次拉取： memories + settings（封面/轮播/文字/主题） */
@@ -130,9 +184,6 @@
     return { memories: (obj.memories || []).map(normalize), settings: obj.settings || null };
   }
 
-  /* 保存整本手账的设置（保留 memories 不动）
-     默认「逐项合并」：本机有值才覆盖云端，本机为空则保留云端现有的，
-     避免一台设备把另一台设备的设置（轮播、封面、主题）整份抹掉。 */
   function nonEmpty(v) {
     if (v == null) return false;
     if (typeof v === 'string') return v.length > 0;
@@ -141,8 +192,8 @@
   }
   async function saveSettings(settings, merge) {
     if (!(await ensureToken())) throw new Error('NO_TOKEN');
-    const d = await readData();
-    const obj = JSON.parse(b64decodeUtf8(d.content));
+    const f = await readFull();
+    const obj = f.obj;
     if (merge) {
       const base = obj.settings || {};
       const out = Object.assign({}, base);
@@ -152,7 +203,7 @@
     } else {
       obj.settings = settings;
     }
-    await writeObj(obj, d.sha);
+    await commit(obj, f.sha);
     return true;
   }
 
@@ -164,35 +215,54 @@
 
   async function insert(memory) {
     if (!(await ensureToken())) throw new Error('NO_TOKEN');
-    const d = await readData();
-    const arr = (JSON.parse(b64decodeUtf8(d.content)).memories) || [];
+    const f = await readFull();
+    const obj = f.obj;
+    const arr = obj.memories || [];
     const item = toRow(memory);
     if (!item.id) item.id = newId();
-    arr.unshift(item);
-    await writeData(arr, d.sha);
+    if (item.image && item.image.indexOf('data:') === 0) {
+      const path = await putPhotoFile(item.id, item.image);
+      if (path) item.image = path;   // 云端只存路径，照片本身是独立文件
+    }
+    const idx = arr.findIndex((m) => m.id === item.id);
+    if (idx >= 0) arr[idx] = item; else arr.unshift(item);
+    obj.memories = arr;
+    await commit(obj, f.sha);
     return normalize(item);
   }
 
   async function update(id, patch) {
     if (!(await ensureToken())) throw new Error('NO_TOKEN');
-    const d = await readData();
-    const all = (JSON.parse(b64decodeUtf8(d.content)).memories) || [];
-    let found = false;
-    const next = all.map((m) => {
-      if (m.id === id) { found = true; return Object.assign({}, m, toRow(patch), { id }); }
-      return m;
-    });
-    if (!found) next.unshift(Object.assign(toRow(patch), { id }));
-    await writeData(next, d.sha);
-    return normalize(Object.assign({}, patch, { id }));
+    const f = await readFull();
+    const obj = f.obj;
+    const all = obj.memories || [];
+    const prev = all.find((m) => m.id === id);
+    const merged = prev ? Object.assign({}, prev, toRow(patch), { id }) : Object.assign(toRow(patch), { id });
+    if (merged.image && merged.image.indexOf('data:') === 0) {
+      const newPath = await putPhotoFile(id, merged.image);
+      if (newPath) {
+        if (prev && prev.image && prev.image.indexOf('data:') !== 0 && prev.image.indexOf('http') !== 0 && prev.image !== newPath) {
+          await deletePhotoFile(prev.image);
+        }
+        merged.image = newPath;
+      }
+    }
+    obj.memories = prev ? all.map((m) => (m.id === id ? merged : m)) : all.concat([merged]);
+    await commit(obj, f.sha);
+    return normalize(merged);
   }
 
   async function remove(id) {
     if (!(await ensureToken())) throw new Error('NO_TOKEN');
-    const d = await readData();
-    const all = (JSON.parse(b64decodeUtf8(d.content)).memories) || [];
-    const next = all.filter((m) => m.id !== id);
-    await writeData(next, d.sha);
+    const f = await readFull();
+    const obj = f.obj;
+    const all = obj.memories || [];
+    const target = all.find((m) => m.id === id);
+    obj.memories = all.filter((m) => m.id !== id);
+    await commit(obj, f.sha);
+    if (target && target.image && target.image.indexOf('data:') !== 0 && target.image.indexOf('http') !== 0) {
+      await deletePhotoFile(target.image);
+    }
     return true;
   }
 
@@ -209,5 +279,5 @@
     return true;
   }
 
-  window.AlbumCloud = { enabled, ensureToken, list, load, saveSettings, insert, update, remove, uploadImage, normalize, toRow, saveDiag };
+  window.AlbumCloud = { enabled, ensureToken, list, load, saveSettings, insert, update, remove, uploadImage, normalize, toRow, saveDiag, resolveImage };
 })();
