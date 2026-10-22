@@ -895,6 +895,34 @@
    * 十、备份导出 / 导入（把上传的照片带去别的手机 / 电脑）
    * ==================================================================== */
   function initBackup() {
+    /* 手动「同步到云端」：拉云端 + 把本机独有照片补传上去，并给明确结果 */
+    async function doSync() {
+      const status = $('syncStatus');
+      if (!cloudOn()) { status.textContent = '未开启云同步'; return; }
+      status.textContent = '同步中…';
+      try {
+        const data = await AlbumCloud.load();
+        if (data.settings) applyCloudSettings(data.settings);
+        let cloudList = data.memories;
+        const localItems = await storeAll();
+        const ids = new Set(cloudList.map((m) => String(m.id)));
+        const missing = localItems.filter((m) => !ids.has(String(m.id))).slice(0, 30);
+        for (const m of missing) {
+          try { const row = await AlbumCloud.insert(AlbumCloud.toRow(m)); cloudList.unshift(row); }
+          catch (e) { break; }
+        }
+        customs = cloudList;
+        try { await dbReplaceAll(customs); } catch (e) {}
+        buildWorkingMemories();
+        initTimeline();
+        status.textContent = '已同步 ✓ 云端 ' + cloudList.length + ' 张，本机补传 ' + missing.length + ' 张。另一台手机刷新即可看到。';
+        if (missing.length) alert('已把本机 ' + missing.length + ' 张照片上传到云端，另一台手机刷新就能看到。');
+      } catch (e) {
+        status.textContent = '同步失败：' + (e && e.message ? e.message : e);
+      }
+    }
+    $('syncBtn').addEventListener('click', doSync);
+
     $('exportBtn').addEventListener('click', async () => {
       if (!customs.length) { alert('这台设备还没有上传过照片，无需备份。'); return; }
       const blob = new Blob([JSON.stringify({ app: 'shiguang-journal', version: 1, memories: customs }, null, 2)], { type: 'application/json' });
@@ -1450,6 +1478,12 @@
     initSheet();
     initBackup();
     initCoverAndReset();
+    const stEl = $('syncStatus');
+    if (stEl) {
+      stEl.textContent = cloudOn()
+        ? '☁ 云端已连接：上传 / 换封面会自动同步，点「☁ 同步到云端」可手动把本机旧照片推上去。'
+        : '⚠ 未连接云端（本机模式）。';
+    }
     if (!cloudData) {
       try { customs = await loadCustoms(); } catch (e) { customs = []; }
     }
