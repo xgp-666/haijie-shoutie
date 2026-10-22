@@ -881,6 +881,7 @@ textarea.sheet__input { min-height: 96px; resize: vertical; line-height: 1.9; }
 }
 .footer__ops button:hover { color: var(--c1); }
 .footer__ops .sep { margin: 0 10px; color: var(--ink-faint); }
+.footer__status { margin: 12px 0 0; min-height: 16px; font-size: 12px; letter-spacing: .04em; color: var(--ink-soft); }
 
 /* ============================ 图片放大预览 ============================ */
 .lightbox {
