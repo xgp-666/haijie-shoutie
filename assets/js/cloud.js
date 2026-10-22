@@ -15,7 +15,11 @@
   const API = 'https://api.github.com';
   const UA = { 'User-Agent': 'codebuddy-album', 'Accept': 'application/vnd.github+json' };
 
-  function getToken() { return (localStorage.getItem(TOKEN_KEY) || '').trim(); }
+  function getToken() {
+    const fromLS = (localStorage.getItem(TOKEN_KEY) || '').trim();
+    if (fromLS) return fromLS;
+    return ((C.token) || '').trim();   // 已内嵌则直接用，无需手动粘贴
+  }
   function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
 
   function b64encodeUtf8(str) {
