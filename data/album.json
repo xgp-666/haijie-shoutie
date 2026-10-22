@@ -1,8 +1,11 @@
 {
   "memories": [],
   "settings": {
+    "savedAt": 1792634861046,
     "cover": "",
-    "siteEdits": {},
+    "siteEdits": {
+      "script": "The sea was unusually calm that day."
+    },
     "memEdits": {},
     "slides": {},
     "theme": {}
