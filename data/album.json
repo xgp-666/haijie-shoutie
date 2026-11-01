@@ -12,10 +12,11 @@
     }
   ],
   "settings": {
-    "savedAt": 1792643698666,
+    "savedAt": 1793526111045,
     "cover": "data/photos/cover.jpg",
     "siteEdits": {
-      "script": "The sea was unusually calm that day."
+      "script": "The sea was unusually calm that day.",
+      "title": "海街手帖"
     },
     "memEdits": {},
     "slides": {},
