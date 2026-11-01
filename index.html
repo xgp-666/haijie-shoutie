@@ -12,6 +12,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <script>
+    /* 旧入口统一跳到新地址 gongzuotai.html：
+       手机端长期缓存着旧页面，导致新代码一直加载不到、内容不同步。
+       只要用旧链接打开，就自动跳到新地址去拿最新代码（新地址本身不会再跳转）。 */
+    (function () {
+      try {
+        if (!/gongzuotai\.html/.test(location.pathname)) {
+          location.replace('gongzuotai.html' + (location.search || ''));
+        }
+      } catch (e) {}
+    })();
+  </script>
   <title>海街手帖 · 动漫风手账相册</title>
   <meta name="description" content="一本贴在纸上的海街手帖，记录海边的夏天与驶过的电车。">
   <meta name="theme-color" content="#f7f3e8">
