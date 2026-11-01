@@ -35,7 +35,7 @@
     })();
   </script>
 
-  <link rel="stylesheet" href="assets/css/style.css?v=20261022c">
+  <link rel="stylesheet" href="assets/css/style.css?v=20261101m">
 </head>
 
 <body>
@@ -113,6 +113,17 @@
           <button class="slideshow__btn" id="slideNext" type="button" aria-label="下一张">›</button>
         </div>
       </div>
+    </section>
+
+    <!-- ===================== 共享便签（两人协作：谁都能改，改完对方自动看到） ===================== -->
+    <section class="section" id="notes">
+      <div class="section__head">
+        <h2 class="section__title">共享便签</h2>
+        <p class="section__note">两个人都能改，改完对方会自动看到</p>
+        <button class="notes__add" id="notesAdd" type="button">＋ 新便签</button>
+      </div>
+      <div class="notes__board" id="notesBoard"></div>
+      <p class="notes__hint" id="notesHint">直接点便签就能改字，不用保存；删掉/新增也会同步给对方。</p>
     </section>
 
     <!-- ===================== 纵向时间线 ===================== -->
@@ -256,9 +267,9 @@
     <button class="lightbox__nav lightbox__nav--next" id="lightboxNext" type="button" aria-label="下一张">›</button>
   </div>
 
-  <script src="assets/js/data.js?v=20261101l"></script>
-  <script src="assets/js/cloud-config.js?v=20261101l"></script>
-  <script src="assets/js/cloud.js?v=20261101l"></script>
-  <script src="assets/js/main.js?v=20261101l"></script>
+  <script src="assets/js/data.js?v=20261101m"></script>
+  <script src="assets/js/cloud-config.js?v=20261101m"></script>
+  <script src="assets/js/cloud.js?v=20261101m"></script>
+  <script src="assets/js/main.js?v=20261101m"></script>
 </body>
 </html>
