@@ -274,7 +274,8 @@
       siteEdits: loadJSON(SITE_EDIT_KEY),
       memEdits: memEdits,
       slides: loadJSON(SLIDE_EDIT_KEY),
-      theme: themeEdits
+      theme: themeEdits,
+      notes: notesData
     };
   }
 
@@ -296,6 +297,7 @@
       saveJSON(THEME_KEY, s.theme);
       if (s.theme.mode) { try { localStorage.setItem('album-theme', s.theme.mode); } catch (e) {} }
     }
+    if (has(s.notes)) applyCloudNotes(s.notes);   // 共享便签：逐条比时间戳合并
   }
 
   let syncTimer = null;
@@ -323,6 +325,110 @@
   function loadJSON(key) { try { return JSON.parse(localStorage.getItem(key)) || {}; } catch (e) { return {}; } }
   function saveJSON(key, obj) { try { localStorage.setItem(key, JSON.stringify(obj)); } catch (e) {} }
   let memEdits = loadJSON(MEM_EDIT_KEY);
+
+  /* ======================================================================
+   * 共享便签：两人都能自由编辑的文字板
+   *   合并规则：每一条便签各自带时间戳，谁更新用谁的那条 —— 这样
+   *   A 改第 1 张、B 改第 2 张时互不覆盖，不会互相把对方的字冲掉。
+   * ==================================================================== */
+  const NOTES_KEY = 'shiguang-shared-notes';
+  let notesData = loadJSON(NOTES_KEY) || {};
+
+  function mergeNotes(local, cloud) {
+    const out = {}, ids = {};
+    Object.keys(local || {}).forEach((k) => { ids[k] = 1; });
+    Object.keys(cloud || {}).forEach((k) => { ids[k] = 1; });
+    Object.keys(ids).forEach((id) => {
+      const l = (local || {})[id], c = (cloud || {})[id];
+      if (!l) out[id] = c;
+      else if (!c) out[id] = l;
+      else out[id] = ((c.at || 0) >= (l.at || 0)) ? c : l;   // 谁的更新用谁的
+    });
+    return out;
+  }
+  function saveNotes() { saveJSON(NOTES_KEY, notesData); }
+
+  function renderNotes() {
+    const board = $('notesBoard');
+    if (!board) return;
+    board.innerHTML = '';
+    const list = Object.keys(notesData)
+      .filter((id) => !notesData[id] || !notesData[id].del)
+      .sort((a, b) => (notesData[b].at || 0) - (notesData[a].at || 0));
+    if (!list.length) {
+      const p = document.createElement('p');
+      p.className = 'notes__hint';
+      p.textContent = '还没有便签，点上面「＋ 新便签」加一张。';
+      board.appendChild(p);
+      return;
+    }
+    list.forEach((id) => {
+      const n = notesData[id] || {};
+      const card = document.createElement('div');
+      card.className = 'note';
+
+      const head = document.createElement('div');
+      head.className = 'note__head';
+      const title = document.createElement('input');
+      title.className = 'note__title';
+      title.type = 'text';
+      title.placeholder = '标题（比如：明天要做）';
+      title.value = n.title || '';
+      title.addEventListener('input', () => {
+        notesData[id] = Object.assign({}, notesData[id], { title: title.value, at: Date.now() });
+        saveNotes(); syncSettings();
+      });
+      const del = document.createElement('button');
+      del.type = 'button'; del.className = 'note__del'; del.title = '删掉这张便签'; del.textContent = '×';
+      del.addEventListener('click', () => {
+        if (!window.confirm('删掉这张便签？（对方那边也会一起删掉）')) return;
+        notesData[id] = { title: '', text: '', at: Date.now(), del: true };   // 墓碑：让删除也能同步
+        saveNotes(); syncSettings(); renderNotes();
+      });
+      head.appendChild(title); head.appendChild(del);
+
+      const ta = document.createElement('textarea');
+      ta.className = 'note__text';
+      ta.placeholder = '随便写点什么……';
+      ta.value = n.text || '';
+      ta.addEventListener('input', () => {
+        notesData[id] = Object.assign({}, notesData[id], { text: ta.value, at: Date.now() });
+        saveNotes(); syncSettings();
+      });
+
+      const meta = document.createElement('p');
+      meta.className = 'note__meta';
+      meta.textContent = '更新于 ' + new Date(n.at || Date.now()).toLocaleString();
+
+      card.appendChild(head); card.appendChild(ta); card.appendChild(meta);
+      board.appendChild(card);
+    });
+  }
+
+  function initNotes() {
+    const add = $('notesAdd');
+    if (add) add.addEventListener('click', () => {
+      const id = 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      notesData[id] = { title: '', text: '', at: Date.now() };
+      saveNotes(); syncSettings(); renderNotes();
+      const board = $('notesBoard');
+      if (board) { const first = board.querySelector('.note__title'); if (first) first.focus(); }
+    });
+    renderNotes();
+  }
+
+  /* 把云端便签合并进来（每条各自比时间戳，保留较新的） */
+  function applyCloudNotes(cloudNotes) {
+    if (!cloudNotes || typeof cloudNotes !== 'object') return;
+    notesData = mergeNotes(notesData, cloudNotes);
+    saveNotes();
+  }
+  /* 刷新便签界面：正打字时不重建，避免把正在输入的内容冲掉 */
+  function refreshNotesUI() {
+    const ae = document.activeElement;
+    if (ae && ae.className && String(ae.className).match(/note__(text|title)/)) return;
+    renderNotes();
+  }
 
   function buildWorkingMemories() {
     // 上传的按 id 倒序（最新贴的排最上；兼容数字 id 和云端字符串 id）
@@ -786,6 +892,7 @@
         applySavedCover();
         initSite();
         applyThemeEdits();
+        refreshNotesUI();          // 共享便签：对方改的字立刻显示出来
       } catch (e) {}
       setSyncStatus('☁ 已同步（' + new Date().toLocaleTimeString() + '）· 共 ' + customs.length + ' 页');
     } catch (e) {
@@ -1609,6 +1716,7 @@
     initSheet();
     initBackup();
     initCoverAndReset();
+    initNotes();               // 共享便签（云端内容已在上面合并进来，这里负责画出来）
     const stEl = $('syncStatus');
     if (stEl) {
       stEl.textContent = cloudOn()
