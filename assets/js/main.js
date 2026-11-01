@@ -251,6 +251,17 @@
   function setSettingsAt(t) {
     try { localStorage.setItem(SETTINGS_AT_KEY, String(t || 0)); } catch (e) {}
   }
+  /* 「本机上次读到的云端版本时间」：判断是否要应用对方改动，只看云端有没有更新，
+     与本机动没动过无关。
+     （之前用「本机上次操作时间 getSettingsAt」判断，导致只要这台设备自己同步过，
+      它的时间戳就比对方新，对方的文字改动会被当成旧数据忽略——这就是改字不同步的原因。） */
+  const CLOUD_AT_KEY = 'shiguang-cloud-at';
+  function getCloudAt() {
+    try { return parseInt(localStorage.getItem(CLOUD_AT_KEY) || '0', 10) || 0; } catch (e) { return 0; }
+  }
+  function setCloudAt(t) {
+    try { localStorage.setItem(CLOUD_AT_KEY, String(t || 0)); } catch (e) {}
+  }
 
   function collectSettings() {
     let cover = '';
@@ -269,10 +280,11 @@
 
   function applyCloudSettings(s) {
     if (!s || typeof s !== 'object') return;
-    /* 云端版本比本机旧（写后读滞后的旧数据）→ 直接忽略，保留本机较新的改动 */
+    /* 只跟「上次读到的云端版本」比：云端的确更新了才应用。
+       不再拿本机操作时间去比，否则本机一动就会把对方的改动当成旧数据忽略掉。 */
     const cloudAt = parseInt(s.savedAt || 0, 10) || 0;
-    if (cloudAt && cloudAt < getSettingsAt()) return;
-    if (cloudAt) setSettingsAt(cloudAt);
+    if (cloudAt && cloudAt <= getCloudAt()) return;   // 已经应用过（或写后读到的旧数据）
+    if (cloudAt) setCloudAt(cloudAt);
     /* 逐项应用，且云端该项为空时不覆盖本机（防止被别的设备/旧数据清空） */
     const has = (v) => (v && typeof v === 'object') ? Object.keys(v).length > 0 : !!v;
     try { if (s.cover) localStorage.setItem(COVER_KEY, s.cover); } catch (e) {}
@@ -291,8 +303,15 @@
     if (!cloudOn()) return;
     clearTimeout(syncTimer);
     syncTimer = setTimeout(async () => {
-      try { await AlbumCloud.saveSettings(collectSettings(), true); }   // true = 逐项合并，不抹掉别的设备
-      catch (e) { if (e && e.message !== 'NO_TOKEN') console.warn('设置同步失败', e); }
+      const payload = collectSettings();
+      try {
+        await AlbumCloud.saveSettings(payload, true);   // true = 逐项合并，不抹掉别的设备
+        setCloudAt(payload.savedAt);   // 记下自己刚写上去的版本，避免下一轮把旧数据又读回来
+        setSyncStatus('☁ 已同步（' + new Date().toLocaleTimeString() + '）· 对方刷新即可看到');
+      } catch (e) {
+        if (e && e.message !== 'NO_TOKEN') console.warn('设置同步失败', e);
+        setSyncStatus('☁ 同步失败，点「刷新同步」重试');
+      }
     }, 800);
   }
 
@@ -1202,6 +1221,7 @@
         localStorage.removeItem(COVER_KEY);
         localStorage.removeItem(SLIDE_EDIT_KEY);
         setSettingsAt(0);   // 清掉时间戳，之后的云端设置才能正常应用
+        setCloudAt(0);      // 同时清掉「已读云端版本」，以便重新接受云端内容
       } catch (e) {}
       if (cloudOn()) {
         try { await AlbumCloud.saveSettings(collectSettings()); } catch (e) {}   // 带最新 savedAt，避免被旧数据回滚
@@ -1631,7 +1651,7 @@
           try { localMem = (await storeAll()).length; } catch (e) {}
           AlbumCloud.saveDiag({
             _dev: deviceId,
-            v: 'k',
+            v: 'l',
             swCtrl: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
             cloudOn: cloudOn(),
             token: !!(window.CLOUD && window.CLOUD.tokenParts) || !!localStorage.getItem('gh_album_token'),
